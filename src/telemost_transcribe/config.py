@@ -25,6 +25,7 @@ class Config:
     # Meeting settings
     alone_wait_seconds: int  # seconds to wait after last participant leaves
     empty_meeting_timeout: int  # seconds to wait if no one joins
+    waiting_room_timeout: int  # seconds to wait in waiting room before giving up
 
     @classmethod
     def load(cls, ffmpeg_override: str | None = None) -> "Config":
@@ -47,6 +48,7 @@ class Config:
         # Meeting settings
         alone_wait_seconds = int(os.getenv("ALONE_WAIT_SECONDS", "15"))
         empty_meeting_timeout = int(os.getenv("EMPTY_MEETING_TIMEOUT", "600"))  # 10 minutes
+        waiting_room_timeout = int(os.getenv("WAITING_ROOM_TIMEOUT", "300"))  # 5 minutes
 
         return cls(
             groq_api_key=groq_api_key,
@@ -55,6 +57,7 @@ class Config:
             silence_threshold=silence_threshold,
             alone_wait_seconds=alone_wait_seconds,
             empty_meeting_timeout=empty_meeting_timeout,
+            waiting_room_timeout=waiting_room_timeout,
         )
 
 

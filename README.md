@@ -79,6 +79,7 @@ python -m telemost_transcribe "https://telemost.yandex.ru/j/12345" --fake-video 
 | 0 | Success |
 | 1 | Error |
 | 2 | No one joined the meeting |
+| 3 | Not admitted from waiting room |
 | 130 | Interrupted by user (Ctrl+C) |
 
 ## Environment Variables
@@ -91,6 +92,7 @@ python -m telemost_transcribe "https://telemost.yandex.ru/j/12345" --fake-video 
 | `SILENCE_THRESHOLD` | `-40dB` | Audio level threshold for silence |
 | `ALONE_WAIT_SECONDS` | `15` | Seconds to wait after last participant leaves |
 | `EMPTY_MEETING_TIMEOUT` | `600` | Seconds to wait if no one joins (10 min) |
+| `WAITING_ROOM_TIMEOUT` | `300` | Seconds to wait in waiting room (5 min) |
 
 ## Requirements
 

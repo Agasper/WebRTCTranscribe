@@ -8,7 +8,7 @@ import click
 from rich.console import Console
 
 from .config import Config, ConfigError
-from .browser.telemost import TelemostSession, NoParticipantsError
+from .browser.telemost import TelemostSession, NoParticipantsError, WaitingRoomTimeoutError
 from .transcription.groq_transcriber import GroqTranscriber
 from .transcription.formatter import format_output
 
@@ -122,6 +122,9 @@ def main(
     except NoParticipantsError:
         console.print("[yellow]No one joined the meeting[/yellow]")
         sys.exit(2)
+    except WaitingRoomTimeoutError:
+        console.print("[yellow]Not admitted from waiting room[/yellow]")
+        sys.exit(3)
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
@@ -150,6 +153,7 @@ async def _run_recording(
             debug=debug,
             alone_wait_seconds=config.alone_wait_seconds,
             empty_meeting_timeout=config.empty_meeting_timeout,
+            waiting_room_timeout=config.waiting_room_timeout,
         ) as session:
             recording = await session.join_and_record()
             audio_path = recording.audio_path

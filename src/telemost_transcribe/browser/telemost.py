@@ -22,6 +22,11 @@ class NoParticipantsError(Exception):
     pass
 
 
+class WaitingRoomTimeoutError(Exception):
+    """Raised when stuck in waiting room and not admitted."""
+    pass
+
+
 @dataclass
 class RecordingResult:
     """Result of a recording session."""
@@ -50,6 +55,7 @@ class TelemostSession:
         fake_video_path: str | None = None,
         alone_wait_seconds: int = 15,
         empty_meeting_timeout: int = 600,
+        waiting_room_timeout: int = 300,
     ):
         self.meeting_url = meeting_url
         self.display_name = display_name
@@ -59,6 +65,7 @@ class TelemostSession:
         self.fake_video_path = fake_video_path
         self.alone_wait_seconds = alone_wait_seconds
         self.empty_meeting_timeout = empty_meeting_timeout
+        self.waiting_room_timeout = waiting_room_timeout
 
         self._playwright = None
         self._browser: Browser | None = None
@@ -344,22 +351,29 @@ class TelemostSession:
         """Wait for WebRTC connection to establish."""
         self._log("Waiting for WebRTC connection...")
 
-        max_wait = 60  # seconds (increased)
-        for i in range(max_wait):
+        waiting_room_time = 0
+        has_connection_no_audio = False
+
+        for i in range(self.waiting_room_timeout):
             try:
                 status = await self._page.evaluate("window.__rtcGetStatus ? window.__rtcGetStatus() : {}")
                 peer_conns = status.get("peerConnections", 0)
                 tracks = status.get("tracksConnected", 0)
 
                 if peer_conns > 0:
-                    self._log(f"Connected! Peer connections: {peer_conns}, Audio tracks: {tracks}")
                     if tracks > 0:
+                        self._log(f"Connected! Peer connections: {peer_conns}, Audio tracks: {tracks}")
                         return
-                    # Have connections but no tracks yet, wait more
-                    if i > 10:
-                        self._log("Have connections but no audio tracks yet...")
+                    else:
+                        # Have connections but no audio - likely in waiting room
+                        has_connection_no_audio = True
+                        waiting_room_time += 1
+                        remaining = self.waiting_room_timeout - waiting_room_time
 
-                if i % 10 == 0 and i > 0:
+                        if i % 10 == 0:
+                            self._log(f"In waiting room... ({remaining}s until timeout)")
+
+                if i % 10 == 0 and i > 0 and not has_connection_no_audio:
                     self._log(f"Still waiting for connection... ({i}s)")
 
             except Exception as e:
@@ -368,7 +382,8 @@ class TelemostSession:
 
             await asyncio.sleep(1)
 
-        self._log("Warning: Connection timeout, continuing anyway")
+        if has_connection_no_audio:
+            raise WaitingRoomTimeoutError("Timed out waiting in the waiting room - not admitted to meeting")
 
     async def _start_recording(self):
         """Start audio recording."""
