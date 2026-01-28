@@ -164,16 +164,17 @@ class TelemostSession:
         await self._handle_prejoin()
         await self._screenshot("03_after_prejoin")
 
+        # Mute microphone and camera BEFORE joining
+        await self._mute_prejoin()
+        await self._screenshot("04_after_mute")
+
         # Try to join the meeting
         await self._click_join()
-        await self._screenshot("04_after_join_click")
+        await self._screenshot("05_after_join_click")
 
         # Wait for connection and start recording
         await self._wait_for_connection()
-        await self._screenshot("05_connected")
-
-        # Mute microphone after joining
-        await self._mute_microphone()
+        await self._screenshot("06_connected")
 
         # Wait a bit for audio tracks to be established
         self._log("Waiting for audio tracks...")
@@ -208,45 +209,69 @@ class TelemostSession:
             duration_seconds=duration,
         )
 
-    async def _mute_microphone(self):
-        """Mute the microphone after joining the meeting."""
-        self._log("Muting microphone and camera...")
+    async def _mute_prejoin(self):
+        """Mute microphone and camera on the pre-join screen BEFORE joining."""
+        self._log("Muting microphone (pre-join)...")
 
-        # Mute microphone
-        # The button title is "Выключить микрофон" when mic is ON
-        try:
-            mic_button = await self._page.query_selector('button[title="Выключить микрофон"]')
-            if not mic_button:
-                mic_button = await self._page.query_selector('.MicrophoneButton_XysKF button')
+        # On pre-join screen, look for mic/camera toggle buttons
+        # They might have different selectors than in-call toolbar
 
-            if mic_button and await mic_button.is_visible():
-                title = await mic_button.get_attribute('title') or ""
-                if "Выключить" in title:
-                    await mic_button.click()
-                    self._log("Microphone muted")
-                else:
-                    self._log("Microphone already muted")
-            else:
-                self._log("Microphone button not found")
-        except Exception as e:
-            self._log(f"Failed to mute microphone: {e}")
+        # Try to mute microphone
+        mic_selectors = [
+            'button[title="Выключить микрофон"]',
+            'button[aria-label*="микрофон" i]',
+            'button[aria-label*="Microphone" i]',
+            '[data-testid="mic-button"]',
+            '[data-testid="microphone-button"]',
+        ]
 
-        # Mute camera
-        # The button title is "Выключить камеру" when camera is ON
-        try:
-            cam_button = await self._page.query_selector('button[title="Выключить камеру"]')
-            if not cam_button:
-                cam_button = await self._page.query_selector('.CameraButton_kttfg button')
+        for selector in mic_selectors:
+            try:
+                mic_button = await self._page.query_selector(selector)
+                if mic_button and await mic_button.is_visible():
+                    title = await mic_button.get_attribute('title') or ""
+                    aria = await mic_button.get_attribute('aria-label') or ""
+                    # Check if mic is ON (title says "turn off")
+                    if "Выключить" in title or "выключить" in aria.lower():
+                        await mic_button.click()
+                        self._log("Microphone muted")
+                        break
+                    elif "Включить" in title or "включить" in aria.lower():
+                        self._log("Microphone already muted")
+                        break
+            except Exception:
+                continue
 
-            if cam_button and await cam_button.is_visible():
-                title = await cam_button.get_attribute('title') or ""
-                if "Выключить" in title:
-                    await cam_button.click()
-                    self._log("Camera muted")
-                else:
-                    self._log("Camera already muted")
-        except Exception as e:
-            self._log(f"Failed to mute camera: {e}")
+        # Only mute camera if no custom video is provided
+        if not self.fake_video_path:
+            await asyncio.sleep(0.3)
+
+            cam_selectors = [
+                'button[title="Выключить камеру"]',
+                'button[aria-label*="камер" i]',
+                'button[aria-label*="Camera" i]',
+                '[data-testid="camera-button"]',
+                '[data-testid="video-button"]',
+            ]
+
+            for selector in cam_selectors:
+                try:
+                    cam_button = await self._page.query_selector(selector)
+                    if cam_button and await cam_button.is_visible():
+                        title = await cam_button.get_attribute('title') or ""
+                        aria = await cam_button.get_attribute('aria-label') or ""
+                        # Check if camera is ON (title says "turn off")
+                        if "Выключить" in title or "выключить" in aria.lower():
+                            await cam_button.click()
+                            self._log("Camera muted")
+                            break
+                        elif "Включить" in title or "включить" in aria.lower():
+                            self._log("Camera already muted")
+                            break
+                except Exception:
+                    continue
+        else:
+            self._log("Camera kept on (custom video provided)")
 
     async def _click_continue_in_browser(self):
         """Click 'Continue in browser' button if present."""
