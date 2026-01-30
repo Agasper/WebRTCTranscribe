@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlparse
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from rich.console import Console
@@ -15,6 +16,16 @@ from ..config import get_js_interceptor_path
 
 
 console = Console()
+
+# Timing constants (seconds)
+PAGE_LOAD_WAIT = 3
+AUDIO_TRACKS_WAIT = 5
+AFTER_CONTINUE_WAIT = 3
+AFTER_JOIN_WAIT = 2
+STATUS_CHECK_INTERVAL = 5
+
+# Supported meeting URL hosts
+ALLOWED_HOSTS = {"telemost.yandex.ru", "telemost.yandex.com"}
 
 
 class NoParticipantsError(Exception):
@@ -57,6 +68,13 @@ class TelemostSession:
         empty_meeting_timeout: int = 600,
         waiting_room_timeout: int = 300,
     ):
+        # Validate URL
+        parsed = urlparse(meeting_url)
+        if parsed.hostname not in ALLOWED_HOSTS:
+            raise ValueError(
+                f"Invalid meeting URL host: {parsed.hostname}. "
+                f"Expected one of: {', '.join(ALLOWED_HOSTS)}"
+            )
         self.meeting_url = meeting_url
         self.display_name = display_name
         self.headless = headless
@@ -153,7 +171,7 @@ class TelemostSession:
         await self._page.goto(self.meeting_url, wait_until="domcontentloaded")
 
         # Wait for page to fully load
-        await asyncio.sleep(3)
+        await asyncio.sleep(PAGE_LOAD_WAIT)
         await self._screenshot("01_loaded")
 
         # Handle "Continue in browser" prompt
@@ -178,7 +196,7 @@ class TelemostSession:
 
         # Wait a bit for audio tracks to be established
         self._log("Waiting for audio tracks...")
-        await asyncio.sleep(5)
+        await asyncio.sleep(AUDIO_TRACKS_WAIT)
 
         started_at = datetime.now(timezone.utc)
         await self._start_recording()
@@ -289,7 +307,7 @@ class TelemostSession:
                 if button and await button.is_visible():
                     await button.click()
                     self._log("Clicked 'Continue in browser'")
-                    await asyncio.sleep(3)  # Wait for next page to load
+                    await asyncio.sleep(AFTER_CONTINUE_WAIT)
                     return
             except Exception:
                 continue
@@ -344,7 +362,7 @@ class TelemostSession:
                         text = await button.text_content()
                         self._log(f"Found button: '{text}' - clicking...")
                         await button.click()
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(AFTER_JOIN_WAIT)
                         return
             except Exception as e:
                 if self.debug:
@@ -440,14 +458,13 @@ class TelemostSession:
         """Wait for the meeting to end."""
         self._log("Waiting for meeting to end (Ctrl+C to stop manually)...")
 
-        check_interval = 5  # seconds
         alone_count = 0
         total_alone_time = 0
         had_participants = False
-        max_alone = max(1, self.alone_wait_seconds // check_interval)  # Convert seconds to check count
+        max_alone = max(1, self.alone_wait_seconds // STATUS_CHECK_INTERVAL)
 
         while True:
-            await asyncio.sleep(check_interval)
+            await asyncio.sleep(STATUS_CHECK_INTERVAL)
 
             # Check if meeting ended (page changed)
             if await self._check_meeting_ended():
@@ -465,7 +482,7 @@ class TelemostSession:
 
                 if participant_count == 1:
                     alone_count += 1
-                    total_alone_time += check_interval
+                    total_alone_time += STATUS_CHECK_INTERVAL
 
                     if had_participants:
                         # Someone was here but left

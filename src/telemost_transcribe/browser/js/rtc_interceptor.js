@@ -19,7 +19,7 @@
         isRecording: false,
         connectedTracks: new Map(), // track.id -> {track, source}
         peerConnections: [],
-        debug: true,
+        debug: false,  // Set to true for debugging
     };
 
     const interceptor = window.__rtcInterceptor;
