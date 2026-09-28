@@ -174,6 +174,7 @@ async def _run_recording(
             started_at=recording.started_at,
             ended_at=recording.ended_at,
             duration_seconds=recording.duration_seconds,
+            audio_path=str(audio_path) if keep_audio and audio_path and audio_path.exists() else None,
         )
 
     finally:
