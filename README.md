@@ -80,6 +80,7 @@ python -m telemost_transcribe "https://telemost.yandex.ru/j/12345" --fake-video 
 | 1 | Error |
 | 2 | No one joined the meeting |
 | 3 | Not admitted from waiting room |
+| 4 | Could not join (pre-join screen or join button not found) |
 | 130 | Interrupted by user (Ctrl+C) |
 
 ## Environment Variables
@@ -93,6 +94,9 @@ python -m telemost_transcribe "https://telemost.yandex.ru/j/12345" --fake-video 
 | `ALONE_WAIT_SECONDS` | `15` | Seconds to wait after last participant leaves |
 | `EMPTY_MEETING_TIMEOUT` | `600` | Seconds to wait if no one joins (10 min) |
 | `WAITING_ROOM_TIMEOUT` | `300` | Seconds to wait in waiting room (5 min) |
+| `JOIN_STEP_TIMEOUT` | `60` | Seconds to wait for the pre-join screen before failing |
+| `MAX_CALL_DURATION` | `21600` | Stop recording and transcribe after this many seconds (6 h) |
+| `LOST_CALL_TIMEOUT` | `300` | Stop recording if the call UI is not found for this long |
 
 ## Requirements
 

@@ -16,6 +16,8 @@
         mixerDestination: null,
         mediaRecorder: null,
         recordedChunks: [],
+        // Chunks are handed to the host one by one (window.__rtcSaveChunk), in order
+        saveQueue: Promise.resolve(),
         isRecording: false,
         connectedTracks: new Map(), // track.id -> {track, source}
         peerConnections: [],
@@ -89,6 +91,27 @@
         } catch (e) {
             log('Error connecting track:', e);
         }
+    }
+
+    function arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        return btoa(binary);
+    }
+
+    // Send a chunk to the host right away: the call iframe may be reloaded
+    // when the meeting ends, and everything kept only in the page is lost.
+    function saveChunk(blob) {
+        if (typeof window.__rtcSaveChunk !== 'function') {
+            return;
+        }
+        interceptor.saveQueue = interceptor.saveQueue
+            .then(() => blob.arrayBuffer())
+            .then(buffer => window.__rtcSaveChunk(arrayBufferToBase64(buffer)))
+            .catch(e => log('Failed to save chunk:', e));
     }
 
     // Override RTCPeerConnection to intercept audio tracks
@@ -192,6 +215,7 @@
         interceptor.mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
                 interceptor.recordedChunks.push(event.data);
+                saveChunk(event.data);
                 log('Chunk recorded, size:', event.data.size, 'total chunks:', interceptor.recordedChunks.length);
             }
         };
@@ -216,9 +240,16 @@
                 return;
             }
 
-            interceptor.mediaRecorder.onstop = () => {
+            interceptor.mediaRecorder.onstop = async () => {
                 interceptor.isRecording = false;
                 log('Recording stopped, chunks:', interceptor.recordedChunks.length);
+
+                // Chunks already went to the host: wait for the last ones and don't send them twice
+                if (typeof window.__rtcSaveChunk === 'function') {
+                    await interceptor.saveQueue;
+                    resolve({ streamed: true, chunks: interceptor.recordedChunks.length });
+                    return;
+                }
 
                 if (interceptor.recordedChunks.length === 0) {
                     log('No chunks recorded!');

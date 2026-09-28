@@ -8,11 +8,12 @@ import click
 from rich.console import Console
 
 from .config import Config, ConfigError
-from .browser.telemost import TelemostSession, NoParticipantsError, WaitingRoomTimeoutError
+from .browser.telemost import TelemostSession, JoinError, NoParticipantsError, WaitingRoomTimeoutError
 from .transcription.groq_transcriber import GroqTranscriber
 from .transcription.formatter import format_output
 
 console = Console()
+err_console = Console(stderr=True)
 
 
 @click.command()
@@ -90,7 +91,7 @@ def main(
     try:
         config = Config.load(ffmpeg_override=ffmpeg)
     except ConfigError as e:
-        console.print(f"[red]Configuration error:[/red] {e}")
+        err_console.print(f"[red]Configuration error:[/red] {e}")
         sys.exit(1)
 
     # Run async main
@@ -120,13 +121,16 @@ def main(
         console.print("\n[yellow]Interrupted by user[/yellow]")
         sys.exit(130)
     except NoParticipantsError:
-        console.print("[yellow]No one joined the meeting[/yellow]")
+        err_console.print("[yellow]No one joined the meeting[/yellow]")
         sys.exit(2)
     except WaitingRoomTimeoutError:
-        console.print("[yellow]Not admitted from waiting room[/yellow]")
+        err_console.print("[yellow]Not admitted from waiting room[/yellow]")
         sys.exit(3)
+    except JoinError as e:
+        err_console.print(f"[red]Could not join the meeting:[/red] {e}")
+        sys.exit(4)
     except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
+        err_console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
 
@@ -154,6 +158,9 @@ async def _run_recording(
             alone_wait_seconds=config.alone_wait_seconds,
             empty_meeting_timeout=config.empty_meeting_timeout,
             waiting_room_timeout=config.waiting_room_timeout,
+            join_step_timeout=config.join_step_timeout,
+            max_call_duration=config.max_call_duration,
+            lost_call_timeout=config.lost_call_timeout,
         ) as session:
             recording = await session.join_and_record()
             audio_path = recording.audio_path

@@ -26,6 +26,9 @@ class Config:
     alone_wait_seconds: int  # seconds to wait after last participant leaves
     empty_meeting_timeout: int  # seconds to wait if no one joins
     waiting_room_timeout: int  # seconds to wait in waiting room before giving up
+    join_step_timeout: int  # seconds to wait for each pre-join screen before giving up
+    max_call_duration: int  # seconds; recording stops after this even if the call goes on
+    lost_call_timeout: int  # seconds without call UI before recording stops
 
     @classmethod
     def load(cls, ffmpeg_override: str | None = None) -> "Config":
@@ -49,6 +52,9 @@ class Config:
         alone_wait_seconds = int(os.getenv("ALONE_WAIT_SECONDS", "15"))
         empty_meeting_timeout = int(os.getenv("EMPTY_MEETING_TIMEOUT", "600"))  # 10 minutes
         waiting_room_timeout = int(os.getenv("WAITING_ROOM_TIMEOUT", "300"))  # 5 minutes
+        join_step_timeout = int(os.getenv("JOIN_STEP_TIMEOUT", "60"))  # 1 minute
+        max_call_duration = int(os.getenv("MAX_CALL_DURATION", "21600"))  # 6 hours
+        lost_call_timeout = int(os.getenv("LOST_CALL_TIMEOUT", "300"))  # 5 minutes
 
         return cls(
             groq_api_key=groq_api_key,
@@ -58,6 +64,9 @@ class Config:
             alone_wait_seconds=alone_wait_seconds,
             empty_meeting_timeout=empty_meeting_timeout,
             waiting_room_timeout=waiting_room_timeout,
+            join_step_timeout=join_step_timeout,
+            max_call_duration=max_call_duration,
+            lost_call_timeout=lost_call_timeout,
         )
 
 
